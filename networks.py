@@ -52,6 +52,7 @@ class ConditionGenerator(nn.Module):
                 ResBlock(ngf * 2 * 3, ngf, norm_layer=norm_layer, scale='up'),  # 128
                 ResBlock(ngf * 1 * 3, ngf, norm_layer=norm_layer, scale='up')  # 256
             )
+        # Note: The out_layer returns only segmentation map, which is just one of the three outputs of the generator; the name out_layer is not really suitable. 
         if opt.out_layer == 'relu':
             self.out_layer = ResBlock(ngf + input1_nc + input2_nc, output_nc, norm_layer=norm_layer, scale='same')
         if opt.out_layer == 'conv':

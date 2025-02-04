@@ -116,6 +116,16 @@ class CPDataset(data.Dataset):
         return agnostic
 
     def __getitem__(self, index):
+        """
+        NOTE: 
+        - PIL.Image does not consistently assign same integers to same colors in Palette mode. That mean channels in `parse_map` and `parse_agnostic_map` may not correspond.
+        
+        Args:
+            index (TYPE): Description
+        
+        Returns:
+            TYPE: Description
+        """
         im_name = self.im_names[index]
         im_name = 'image/' + im_name
         c_name = {}
@@ -125,14 +135,15 @@ class CPDataset(data.Dataset):
             c_name[key] = self.c_names[key][index]
             c[key] = Image.open(osp.join(self.data_path, 'cloth', c_name[key])).convert('RGB')
             c[key] = transforms.Resize(self.fine_width, interpolation=2)(c[key])
-            cm[key] = Image.open(osp.join(self.data_path, 'cloth-mask', c_name[key]))
+            
+            cm[key] = Image.open(osp.join(self.data_path, 'cloth-mask', c_name[key])) # NOTE: return grayscale image
             cm[key] = transforms.Resize(self.fine_width, interpolation=0)(cm[key])
 
             c[key] = self.transform(c[key])  # [-1,1]
-            cm_array = np.array(cm[key])
+            cm_array = np.array(cm[key]) # NOTE: return array of shape [H,W]
             cm_array = (cm_array >= 128).astype(np.float32)
             cm[key] = torch.from_numpy(cm_array)  # [0,1]
-            cm[key].unsqueeze_(0)
+            cm[key].unsqueeze_(0) # NOTE: return array of shape [1,H,W]
 
         # person image
         im_pil_big = Image.open(osp.join(self.data_path, im_name))
@@ -140,10 +151,11 @@ class CPDataset(data.Dataset):
         im = self.transform(im_pil)
 
         # load parsing image
-        parse_name = im_name.replace('image', 'image-parse-v3').replace('.jpg', '.png')
-        im_parse_pil_big = Image.open(osp.join(self.data_path, parse_name))
+        parse_name = im_name.replace('image', 'image-parse').replace('.jpg', '.png')
+        im_parse_pil_big = Image.open(osp.join(self.data_path, parse_name)) # return palette image
         im_parse_pil = transforms.Resize(self.fine_width, interpolation=0)(im_parse_pil_big)
-        parse = torch.from_numpy(np.array(im_parse_pil)[None]).long()
+        # NOTE: np.array(im_parse_pil) return array of shape [H,W] b/c PIL.Image read the parse image in Palette mode; indicing with None is a way to include a new dimension; shape of parse is [1,H,W]
+        parse = torch.from_numpy(np.array(im_parse_pil)[None]).long()  
         im_parse = self.transform(im_parse_pil.convert('RGB'))
 
         # parse map
@@ -163,27 +175,33 @@ class CPDataset(data.Dataset):
             12: ['noise',       [3, 11]]
         }
         
+        # NOTE: pixel values in parse_map are either 0.0 or 1.0; and pixels of value 1 is unique across channels, thanks to parse is a single channel image.
         parse_map = torch.FloatTensor(20, self.fine_height, self.fine_width).zero_()
+        # NOTE: scatter_ fill 1 in pixels of each channel if find corresponding index (channel 0 with index 0, and so on) in the same spacial location; each channel represents a map of each color (or class) found in parse.
         parse_map = parse_map.scatter_(0, parse, 1.0)
+        # NOTE: values in new_parse_map are in range [0.0, 1.0], since there is no overlap between channels in parse_map; new_parse_map is parse_map but now group several labels together to reduce number of channels.
         new_parse_map = torch.FloatTensor(self.semantic_nc, self.fine_height, self.fine_width).zero_()
-
         for i in range(len(labels)):
             for label in labels[i][1]:
                 new_parse_map[i] += parse_map[label]
-                
+            
+        # NOTE: even if call onehot, value in parse_onehot in range [0,12] corresponding to category values in labels, thanks to the multiplication between pixel values and the indices. parse_onehot is new_parse_map, but now reduce to only single channel. Since there is no overlap between channels in new_parse_map, the changes in pixel values depend only to indices of labels.     
         parse_onehot = torch.FloatTensor(1, self.fine_height, self.fine_width).zero_()
         for i in range(len(labels)):
             for label in labels[i][1]:
                 parse_onehot[0] += parse_map[label] * i
                 
         # load image-parse-agnostic
-        image_parse_agnostic = Image.open(osp.join(self.data_path, parse_name.replace('image-parse-v3', 'image-parse-agnostic-v3.2')))
+        image_parse_agnostic = Image.open(osp.join(self.data_path, parse_name.replace('image-parse', 'image-parse-agnostic')))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
+        # NOTE: parse_agnostic is single channel array. See note about `parse` 
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
         image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
 
         parse_agnostic_map = torch.FloatTensor(20, self.fine_height, self.fine_width).zero_()
+        # NOTE: there is no overlap in pixels with values of 1 in parse_agnostic_map for the same reason as in `parse_map`.
         parse_agnostic_map = parse_agnostic_map.scatter_(0, parse_agnostic, 1.0)
+        # NOTE: `new_parse_agnostic_map` is same as `parse_agnostic_map` with fewer channels, similar to `new_parse_map`; pixels value either 0.0 or 1.0
         new_parse_agnostic_map = torch.FloatTensor(self.semantic_nc, self.fine_height, self.fine_width).zero_()
         for i in range(len(labels)):
             for label in labels[i][1]:
@@ -308,7 +326,7 @@ class CPDatasetTest(data.Dataset):
 
         # load parsing image
         parse_name = im_name.replace('.jpg', '.png')
-        im_parse = Image.open(osp.join(self.data_path, 'image-parse-v3', parse_name))
+        im_parse = Image.open(osp.join(self.data_path, 'image-parse', parse_name))
         im_parse = transforms.Resize(self.fine_width, interpolation=0)(im_parse)
         parse = torch.from_numpy(np.array(im_parse)[None]).long()
         im_parse = self.transform(im_parse.convert('RGB'))
@@ -343,7 +361,7 @@ class CPDatasetTest(data.Dataset):
                 parse_onehot[0] += parse_map[label] * i
 
         # load image-parse-agnostic
-        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic-v3.2', parse_name))
+        image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic', parse_name))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
         image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
@@ -424,3 +442,40 @@ class CPDataLoader(object):
             batch = self.data_iter.__next__()
 
         return batch
+
+
+if __name__ == "__main__":
+    import cv2
+    from collections import namedtuple
+    Opt = namedtuple("Opt", 'dataroot datamode data_list fine_height fine_width semantic_nc', )
+    opt = Opt(
+        dataroot="./data",
+        datamode="train",
+        data_list="train_pairs.txt",
+        fine_height=256,
+        fine_width=192,
+        semantic_nc=13, 
+    )
+    def display_numpy_image(array):
+        """Summary
+        
+        Args:
+            array (TYPE): numpy array of size (x, y, C)
+        """
+        cv2.imshow("", array)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    def display_tensor_image(tensor_image):
+        array = tensor_image.numpy().astype(np.uint8)
+        if len(tensor_image.size()) == 3:
+            array = np.transpose(array, (1,2,0))
+            array = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+        display_numpy_image(array)
+
+
+    dataset = CPDataset(opt)
+
+    for i in range(5):
+        data = dataset.__getitem__(i)
+        display_tensor_image(data["agnostic"])

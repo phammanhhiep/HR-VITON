@@ -36,7 +36,18 @@ def iou_metric(y_pred_batch, y_true_batch):
     return iou
 
 def remove_overlap(seg_out, warped_cm):
+    """Find and remove the overlap section of the cloth section of warped_cm and non-cloth section in seg_out. Non-cloth pixels extracted from seg_out must be multipled with warped_cm to identity the overlapping in cloth section before being removed. The function does two things, it remove occulations (hand, hair, objects) from the mask, and also misalignment (misplacement between the mask and cloth section in segmap). 
+
+    Note: The index of cloth (or the rest of parts in an image) in seg_out depends on how channels are organized in modified segmentation map, defined in CPDataset
+    Note: the code consider both bottom and upper cloth items (index 4 and index 5)
     
+    Args:
+        seg_out (TYPE): Description
+        warped_cm (TYPE): Description
+    
+    Returns:
+        TYPE: Description
+    """
     assert len(warped_cm.shape) == 4
     
     warped_cm = warped_cm - (torch.cat([seg_out[:, 1:3, :, :], seg_out[:, 5:, :, :]], dim=1)).sum(dim=1, keepdim=True) * warped_cm
@@ -137,7 +148,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
         # input1
         c_paired = inputs['cloth']['paired'].cuda()
         cm_paired = inputs['cloth_mask']['paired'].cuda()
-        cm_paired = torch.FloatTensor((cm_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+        cm_paired = torch.FloatTensor((cm_paired.detach().cpu().numpy() > 0.5).astype(np.float)).cuda() # NOTE: unnecessary since cm_paired is already onehot array. See CPDataset. 
         # input2
         parse_agnostic = inputs['parse_agnostic'].cuda()
         densepose = inputs['densepose'].cuda()
@@ -169,6 +180,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
                 
             if opt.clothmask_composition == 'warp_grad':
                 cloth_mask = torch.ones_like(fake_segmap.detach())
+                # The index of cloth in cloth_mask depends on how channels are organized in modified segmentation map, defined in CPDataset
                 cloth_mask[:, 3:4, :, :] = warped_clothmask_paired
                 fake_segmap = fake_segmap * cloth_mask
         if opt.occlusion:
@@ -176,6 +188,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
             warped_cloth_paired = warped_cloth_paired * warped_clothmask_paired + torch.ones_like(warped_cloth_paired) * (1-warped_clothmask_paired)
         
         # generated fake cloth mask & misalign mask
+        # NOTE: fake_clothmask, warped_cm_onehot, and misalign are not used to train
         fake_clothmask = (torch.argmax(fake_segmap.detach(), dim=1, keepdim=True) == 3).long()
         misalign = fake_clothmask - warped_cm_onehot
         misalign[misalign < 0.0] = 0.0
