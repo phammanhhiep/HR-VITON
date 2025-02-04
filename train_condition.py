@@ -480,7 +480,7 @@ def main():
         opt.data_list = opt.test_data_list
         test_dataset = CPDatasetTest(opt)
         opt.batch_size = train_bsize
-        val_dataset = Subset(test_dataset, np.arange(2000))
+        val_dataset = Subset(test_dataset, np.arange(len(test_dataset)))
         test_loader = CPDataLoader(opt, test_dataset)
         val_loader = CPDataLoader(opt, val_dataset)
     # visualization

@@ -437,7 +437,7 @@ class CPDataLoader(object):
     def next_batch(self):
         try:
             batch = self.data_iter.__next__()
-        except (IndexError, StopIteration) as e:
+        except Exception as e:
             self.data_iter = self.data_loader.__iter__()
             batch = self.data_iter.__next__()
 
