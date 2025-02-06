@@ -132,7 +132,7 @@ class ConditionGenerator(nn.Module):
                 T2 = F.interpolate(T2, scale_factor=2, mode=upsample) + self.conv2[4 - i](E2_list[4 - i]) # NOTE: T2 is not use when i > 0
                 
                 flow = F.interpolate(flow_list[i - 1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)  # upsample n-1 flow
-                # NOTE: it is unclear why the author normalize the flow in this way. `F.grid_sample` require `grid` argument in range [-1,1], and for values outside, it take border values
+                # Note: iW and iH are size of input1, which is doubled those of flow before upscale twice, that is why we have iW/2 and iH/2; minus of 1 is to handle pixels in the edge of flow;  So basically, the norm move values of original flow into range [0,2]. Since flow is expected to represent changes, rather than absolute positions, the norm double the change to accelerate the deformation.
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
                 warped_T1 = F.grid_sample(T1, flow_norm + grid, padding_mode='border')
                 
@@ -150,7 +150,7 @@ class ConditionGenerator(nn.Module):
         grid = make_grid(N, iH, iW,opt)
         
         flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)
-        # Note: iW and iH are size of input1, which is doubled those of flow before upscale twice, that is why we have iW/2 and iH/2; minus of 1 is to handle pixels in the edge of flow;  So basically, the norm move values of original flow into range [0,2]. Since flow is expected to represent changes, rather than absolute positions, the norm double the change to accelerate the deformation.  
+          
         flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
         warped_input1 = F.grid_sample(input1, flow_norm + grid, padding_mode='border')
         
