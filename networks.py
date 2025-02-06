@@ -129,9 +129,10 @@ class ConditionGenerator(nn.Module):
                 
             else:
                 T1 = F.interpolate(T1, scale_factor=2, mode=upsample) + self.conv1[4 - i](E1_list[4 - i])
-                T2 = F.interpolate(T2, scale_factor=2, mode=upsample) + self.conv2[4 - i](E2_list[4 - i]) 
+                T2 = F.interpolate(T2, scale_factor=2, mode=upsample) + self.conv2[4 - i](E2_list[4 - i]) # NOTE: T2 is not use when i > 0
                 
                 flow = F.interpolate(flow_list[i - 1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)  # upsample n-1 flow
+                # NOTE: it is unclear why the author normalize the flow in this way. `F.grid_sample` require `grid` argument in range [-1,1], and for values outside, it take border values
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
                 warped_T1 = F.grid_sample(T1, flow_norm + grid, padding_mode='border')
                 

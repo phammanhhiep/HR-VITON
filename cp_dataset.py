@@ -40,12 +40,14 @@ class CPDataset(data.Dataset):
 
         self.im_names = im_names
         self.c_names = dict()
+        # NOTE: c_names contain file name for cloth to be swap, with `paired` represents the same cloth items in images in `im_names`, while `unpaired` represents different clothes. In training, only paired clothes are used, while in testing either group can be used.
         self.c_names['paired'] = im_names
         self.c_names['unpaired'] = c_names
 
     def name(self):
         return "CPDataset"
     
+    # NOTE: the zalora hd dataset already contain agnostic images, and the method generate very similar agnostic images (if not identical). Run code at the end of the module to verify by observing its outputs. 
     def get_agnostic(self, im, im_parse, pose_data):
         parse_array = np.array(im_parse)
         parse_head = ((parse_array == 4).astype(np.float32) +
@@ -131,13 +133,14 @@ class CPDataset(data.Dataset):
         c_name = {}
         c = {}
         cm = {}
+        # NOTE: only get images of the same name accross folders; in other word, images and same-clothe images are used in training.
         for key in ['paired']:
             c_name[key] = self.c_names[key][index]
             c[key] = Image.open(osp.join(self.data_path, 'cloth', c_name[key])).convert('RGB')
-            c[key] = transforms.Resize(self.fine_width, interpolation=2)(c[key])
+            c[key] = transforms.Resize(self.fine_width, interpolation=2)(c[key]) # Note: interpolation=2 is same as bilinear method. See reference: https://github.com/pytorch/vision/blob/main/torchvision/transforms/functional.py#L41
             
             cm[key] = Image.open(osp.join(self.data_path, 'cloth-mask', c_name[key])) # NOTE: return grayscale image
-            cm[key] = transforms.Resize(self.fine_width, interpolation=0)(cm[key])
+            cm[key] = transforms.Resize(self.fine_width, interpolation=0)(cm[key]) # Note: interpolation=0 is the same as nearest method.
 
             c[key] = self.transform(c[key])  # [-1,1]
             cm_array = np.array(cm[key]) # NOTE: return array of shape [H,W]
@@ -156,7 +159,7 @@ class CPDataset(data.Dataset):
         im_parse_pil = transforms.Resize(self.fine_width, interpolation=0)(im_parse_pil_big)
         # NOTE: np.array(im_parse_pil) return array of shape [H,W] b/c PIL.Image read the parse image in Palette mode; indicing with None is a way to include a new dimension; shape of parse is [1,H,W]
         parse = torch.from_numpy(np.array(im_parse_pil)[None]).long()  
-        im_parse = self.transform(im_parse_pil.convert('RGB'))
+        im_parse = self.transform(im_parse_pil.convert('RGB')) # Note: not used
 
         # parse map
         labels = {
@@ -196,7 +199,7 @@ class CPDataset(data.Dataset):
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         # NOTE: parse_agnostic is single channel array. See note about `parse` 
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
-        image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
+        image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB')) # NOTE: not used
 
         parse_agnostic_map = torch.FloatTensor(20, self.fine_height, self.fine_width).zero_()
         # NOTE: there is no overlap in pixels with values of 1 in parse_agnostic_map for the same reason as in `parse_map`.
@@ -329,7 +332,7 @@ class CPDatasetTest(data.Dataset):
         im_parse = Image.open(osp.join(self.data_path, 'image-parse', parse_name))
         im_parse = transforms.Resize(self.fine_width, interpolation=0)(im_parse)
         parse = torch.from_numpy(np.array(im_parse)[None]).long()
-        im_parse = self.transform(im_parse.convert('RGB'))
+        im_parse = self.transform(im_parse.convert('RGB')) # Note: not used
         
         labels = {
             0:  ['background',  [0, 10]],
@@ -364,7 +367,7 @@ class CPDatasetTest(data.Dataset):
         image_parse_agnostic = Image.open(osp.join(self.data_path, 'image-parse-agnostic', parse_name))
         image_parse_agnostic = transforms.Resize(self.fine_width, interpolation=0)(image_parse_agnostic)
         parse_agnostic = torch.from_numpy(np.array(image_parse_agnostic)[None]).long()
-        image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB'))
+        image_parse_agnostic = self.transform(image_parse_agnostic.convert('RGB')) # Note: not used.
 
         parse_agnostic_map = torch.FloatTensor(20, self.fine_height, self.fine_width).zero_()
         parse_agnostic_map = parse_agnostic_map.scatter_(0, parse_agnostic, 1.0)
@@ -478,4 +481,4 @@ if __name__ == "__main__":
 
     for i in range(5):
         data = dataset.__getitem__(i)
-        display_tensor_image(data["agnostic"])
+        display_tensor_image((data["agnostic"]/2+0.5) * 255)
