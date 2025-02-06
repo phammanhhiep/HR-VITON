@@ -150,6 +150,7 @@ class ConditionGenerator(nn.Module):
         grid = make_grid(N, iH, iW,opt)
         
         flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)
+        # Note: iW and iH are size of input1, which is doubled those of flow before upscale twice, that is why we have iW/2 and iH/2; minus of 1 is to handle pixels in the edge of flow;  So basically, the norm move values of original flow into range [0,2]. Since flow is expected to represent changes, rather than absolute positions, the norm double the change to accelerate the deformation.  
         flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
         warped_input1 = F.grid_sample(input1, flow_norm + grid, padding_mode='border')
         

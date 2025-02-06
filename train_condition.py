@@ -253,6 +253,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
                 N, fH, fW, _ = flow.size()
                 grid = mkgrid(N, iH, iW, opt)
                 flow = F.interpolate(flow.permute(0, 3, 1, 2), size = c_paired.shape[2:], mode=opt.upsample).permute(0, 2, 3, 1)
+                # Note: compare with how flow_norm is computed in ConditionGenerator, though look different, but the are using the same formula; since we work on intermediate flows, fW and fH are size of original flow, and not need to use fH/2 or fH/2.
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((fW - 1.0) / 2.0), flow[:, :, :, 1:2] / ((fH - 1.0) / 2.0)], 3)
                 warped_c = F.grid_sample(c_paired, flow_norm + grid, padding_mode='border')
                 warped_cm = F.grid_sample(cm_paired, flow_norm + grid, padding_mode='border')
