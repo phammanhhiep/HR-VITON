@@ -132,7 +132,7 @@ class ConditionGenerator(nn.Module):
                 T2 = F.interpolate(T2, scale_factor=2, mode=upsample) + self.conv2[4 - i](E2_list[4 - i]) # NOTE: T2 is not use when i > 0
                 
                 flow = F.interpolate(flow_list[i - 1].permute(0, 3, 1, 2), scale_factor=2, mode=upsample).permute(0, 2, 3, 1)  # upsample n-1 flow
-                # Note: iW and iH are size of input1, which is doubled those of flow before upscale twice, that is why we have iW/2 and iH/2; minus of 1 is to handle pixels in the edge of flow;  So basically, the norm move values of original flow into range [0,2]. Since flow is expected to represent changes, rather than absolute positions, the norm double the change to accelerate the deformation.
+                # Note: iW and iH are size of input1, which is doubled those of flow before upscale twice, that is why the author use iW/2 and iH/2 to normalize pixel values; minus of 1 is to handle pixels in the edge of flow;  So basically, the norm move values of original flow into range [0,2]. Since flow is expected to represent changes, rather than absolute positions, the norm double the change to accelerate the deformation.
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((iW/2 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((iH/2 - 1.0) / 2.0)], 3)
                 warped_T1 = F.grid_sample(T1, flow_norm + grid, padding_mode='border')
                 
@@ -185,6 +185,7 @@ class ResBlock(nn.Module):
                 nn.Conv2d(in_nc, out_nc, kernel_size=1,bias=True)
             )
         if scale == 'down':
+            # Note: there is no norm (batch or instance norm) following immediately the conv2d, so not using bias is just inconsistent and suboptimal.
             self.scale = nn.Conv2d(in_nc, out_nc, kernel_size=3, stride=2, padding=1, bias=use_bias)
             
         self.block = nn.Sequential(
@@ -210,6 +211,7 @@ class Vgg19(nn.Module):
         self.slice3 = torch.nn.Sequential()
         self.slice4 = torch.nn.Sequential()
         self.slice5 = torch.nn.Sequential()
+        # Note: The choice of features is consistent with architecture of vgg19, and is common choice in community: outputs of the first ReLU in each of the five major blocks of Vgg19.
         for x in range(2):
             self.slice1.add_module(str(x), vgg_pretrained_features[x])
         for x in range(2, 7):
@@ -259,8 +261,7 @@ class VGGLoss(nn.Module):
 # that has the same size as the input
 
 class GANLoss(nn.Module):
-    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0,
-                 tensor=torch.FloatTensor):
+    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0, tensor=torch.FloatTensor):
         super(GANLoss, self).__init__()
         self.real_label = target_real_label
         self.fake_label = target_fake_label
@@ -290,6 +291,7 @@ class GANLoss(nn.Module):
         return target_tensor
 
     def __call__(self, input, target_is_real):
+        # Note: if isinstance(input[0], list), the input contain intermediate output, and thus only the last value of each input[i] is used to compute loss. 
         if isinstance(input[0], list):
             loss = 0
             for input_i in input:
@@ -323,6 +325,7 @@ class MultiscaleDiscriminator(nn.Module):
         self.downsample = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
 
     def singleD_forward(self, model, input):
+        # Note: the method always return a list of tensor
         if self.getIntermFeat:
             result = [input]
             for i in range(len(model)):
@@ -332,6 +335,7 @@ class MultiscaleDiscriminator(nn.Module):
             return [model(input)]
 
     def forward(self, input):
+        # Note: the method always return a list of list of tensors; the different between whether self.getIntermFeat is True or False is that the former implies a list of list of more than one tensor, while the later is a list of list of a single tensor.
         num_D = self.num_D
         
         result = []
@@ -345,7 +349,7 @@ class MultiscaleDiscriminator(nn.Module):
                 model = [getattr(self, 'scale' + str(num_D - 1 - i) + '_layer' + str(j)) for j in
                          range(self.n_layers + 2)]
             else:
-                model = getattr(self, 'layer' + str(num_D - 1 - i))
+                model = getattr(self, 'layer' + str(num_D - 1 - i)) # NOTE: useless in find reverse index, since the small model are the same, the difference only in the input; it seems a 
             result.append(self.singleD_forward(model, input_downsampled))
             if i != (num_D - 1):
                 input_downsampled = self.downsample(input_downsampled)
@@ -360,6 +364,7 @@ class NLayerDiscriminator(nn.Module):
 
         kw = 4
         padw = int(np.ceil((kw - 1.0) / 2))
+        # Note: the choice that squence is a list of list makes it easier to get intermediate output if `getIntermFeat` is True.  
         sequence = [[nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]]
 
         nf = ndf

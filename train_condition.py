@@ -170,7 +170,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
         
         # warped cloth mask one hot 
         
-        warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(float)).cuda()
+        warped_cm_onehot = torch.FloatTensor((warped_clothmask_paired.detach().cpu().numpy() > 0.5).astype(float)).cuda() # NOTE: not used to train with default config.
         # fake segmap cloth channel * warped clothmask
         if opt.clothmask_composition != 'no_composition':
             if opt.clothmask_composition == 'detach':
@@ -184,6 +184,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
                 cloth_mask[:, 3:4, :, :] = warped_clothmask_paired
                 fake_segmap = fake_segmap * cloth_mask
         if opt.occlusion:
+            # Note: using softmax to normalize fake_segmap accross channel is correct since, since each channel represents a body parts parsed, and thus for each channel, values of a pixel represent a probaility it in the body part.
             warped_clothmask_paired = remove_overlap(F.softmax(fake_segmap, dim=1), warped_clothmask_paired)
             warped_cloth_paired = warped_cloth_paired * warped_clothmask_paired + torch.ones_like(warped_cloth_paired) * (1-warped_clothmask_paired)
         
@@ -263,6 +264,7 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
             
         # loss segmentation
         # generator
+        # NOTE: label_onehot.transpose is required since label_onehot is of shape (B,1,H,W), to remove the channel dimension, which has only one channel.
         CE_loss = cross_entropy2d(fake_segmap, label_onehot.transpose(0, 1)[0].long())
         
         if opt.no_GAN_loss:
@@ -458,8 +460,8 @@ def train(opt, train_loader, test_loader, val_loader, board, tocg, D):
 
         # save
         if (step + 1) % opt.save_count == 0:
-            save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_step_%06d.pth' % (step + 1)),opt)
-            save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, 'tocg_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(D, os.path.join(opt.checkpoint_dir, 'D_step_%06d.pth' % (step + 1)),opt)
 
 def main():
     opt = get_opt()
@@ -487,7 +489,7 @@ def main():
     # visualization
     if not os.path.exists(opt.tensorboard_dir):
         os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.name))
+    board = SummaryWriter(log_dir=opt.tensorboard_dir)
 
     # Model
     input1_nc = 4  # cloth + cloth-mask
@@ -503,8 +505,8 @@ def main():
     train(opt, train_loader, val_loader, test_loader, board, tocg, D)
 
     # Save Checkpoint
-    save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, opt.name, 'tocg_final.pth'),opt)
-    save_checkpoint(D, os.path.join(opt.checkpoint_dir, opt.name, 'D_final.pth'),opt)
+    save_checkpoint(tocg, os.path.join(opt.checkpoint_dir, 'tocg_final.pth'),opt)
+    save_checkpoint(D, os.path.join(opt.checkpoint_dir, 'D_final.pth'),opt)
     print("Finished training %s!" % opt.name)
 
 
