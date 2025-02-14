@@ -590,8 +590,8 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                      D_losses['D_Fake'].mean().item(), D_losses['D_Real'].mean().item()), flush=True)
 
         if (step + 1) % opt.save_count == 0:
-            save_checkpoint(generator.module, os.path.join(opt.checkpoint_dir, opt.name, 'gen_step_%06d.pth' % (step + 1)),opt)
-            save_checkpoint(discriminator.module, os.path.join(opt.checkpoint_dir, opt.name, 'dis_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(generator.module, os.path.join(opt.checkpoint_dir, 'gen_step_%06d.pth' % (step + 1)),opt)
+            save_checkpoint(discriminator.module, os.path.join(opt.checkpoint_dir, 'dis_step_%06d.pth' % (step + 1)),opt)
 
         if (step + 1) % 1000 == 0:
             scheduler_gen.step()
@@ -626,7 +626,7 @@ def main():
     # visualization
     if not os.path.exists(opt.tensorboard_dir):
         os.makedirs(opt.tensorboard_dir)
-    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir, opt.name))
+    board = SummaryWriter(log_dir=os.path.join(opt.tensorboard_dir))
     
     # warping-seg Model
     tocg = None
@@ -659,8 +659,8 @@ def main():
     train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generator, discriminator, model)
 
     # Save Checkpoint
-    save_checkpoint(generator, os.path.join(opt.checkpoint_dir, opt.name, 'gen_model_final.pth'),opt)
-    save_checkpoint(discriminator, os.path.join(opt.checkpoint_dir, opt.name, 'dis_model_final.pth'),opt)
+    save_checkpoint(generator, os.path.join(opt.checkpoint_dir, 'gen_model_final.pth'),opt)
+    save_checkpoint(discriminator, os.path.join(opt.checkpoint_dir, 'dis_model_final.pth'),opt)
 
     print("Finished training %s!" % opt.name)
 
