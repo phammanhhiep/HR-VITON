@@ -36,7 +36,7 @@ def get_opt():
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('-j', '--workers', type=int, default=4)
-    parser.add_argument('-b', '--batch_size', type=int, default=8)
+    parser.add_argument('-b', '--batch_size', type=int, default=4)
     parser.add_argument('--fp16', action='store_true', help='use amp')
     # Cuda availability
     parser.add_argument('--cuda',default=False, help='cuda or cpu')
