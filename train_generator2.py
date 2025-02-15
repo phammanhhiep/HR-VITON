@@ -37,7 +37,7 @@ def get_opt():
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=4)
-    parser.add_argument('--fp16', action='store_true', help='use amp')
+    parser.add_argument('--fp16', action='store_true', help ='use amp')
     # Cuda availability
     parser.add_argument('--cuda',default=False, help='cuda or cpu')
 
@@ -299,10 +299,13 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
 
             loss_gen = sum(G_losses.values()).mean()
 
-        optimizer_gen.zero_grad()
+        
         # NOTE: AMP code 
         grad_scaler.scale(loss_gen).backward()
-        grad_scaler.step(optimizer_gen)
+        
+        if (step+1) % 2 == 0:
+            grad_scaler.step(optimizer_gen)
+            optimizer_gen.zero_grad()
 
         # --------------------------------------------------------------------------------------------------------------
         #                                            Train the discriminator
@@ -336,12 +339,14 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
 
             loss_dis = sum(D_losses.values()).mean()
 
-        optimizer_dis.zero_grad()
-        
+
         # NOTE: AMP code 
         grad_scaler.scale(loss_dis).backward()
-        grad_scaler.step(optimizer_dis)
-        grad_scaler.update()
+
+        if (step+1) % 2 == 0:
+            grad_scaler.step(optimizer_dis)
+            grad_scaler.update()     
+            optimizer_dis.zero_grad()
 
         # --------------------------------------------------------------------------------------------------------------
         #                                            recording
