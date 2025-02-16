@@ -158,7 +158,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
             max(0, step * 1000 + opt.load_step - opt.keep_step) / float(opt.decay_step + 1))
 
     # NOTE: AMD code
-    grad_scaler = torch.amd.GradScaler()
+    grad_scaler = torch.amp.GradScaler()
         
     upsample = torch.nn.Upsample(scale_factor=4, mode='bilinear')
     gauss = tgm.image.GaussianBlur((15, 15), (3, 3))
