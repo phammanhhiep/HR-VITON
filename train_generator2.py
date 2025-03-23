@@ -185,6 +185,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
             if not opt.GT:
                 # Warping Cloth
                 # down
+                # NOTE: need to scale down because the fine_width and fine_height is not what expected by condition generator.
                 pre_clothes_mask_down = F.interpolate(cm, size=(256, 192), mode='nearest')
                 input_parse_agnostic_down = F.interpolate(parse_agnostic, size=(256, 192), mode='nearest')
                 clothes_down = F.interpolate(c_paired, size=(256, 192), mode='bilinear')
@@ -221,8 +222,13 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 warped_clothmask = F.grid_sample(cm, warped_grid, padding_mode='border')
 
                 # make generator input parse map
+                # NOTE: upscape fake_segmap to desired size, i.e. 1024x768
                 fake_parse_gauss = gauss(F.interpolate(fake_segmap, size=(iH, iW), mode='bilinear'))
                 fake_parse = fake_parse_gauss.argmax(dim=1)[:, None]
+
+                # NOTE: have to recompute parse just like as in cp_dataset.py, because fake_parse is upscaped version of the generated seg map. In case ground truth is used, does not need to compute old_parse, since it is the parse of the parse image.
+                old_parse = torch.FloatTensor(fake_parse.size(0), 13, opt.fine_height, opt.fine_width).zero_().cuda()
+                old_parse.scatter_(1, fake_parse, 1.0)
 
                 # occlusion
                 if opt.occlusion:
@@ -235,11 +241,10 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 # parse_rn[:, 2:3] -= region_mask
             else:
                 # parse pre-process
-                fake_parse = parse_GT.argmax(dim=1)[:, None]
+                # fake_parse = parse_GT.argmax(dim=1)[:, None]
+                old_parse = parse_GT
                 warped_cloth_paired = parse_cloth
-                
-            old_parse = torch.FloatTensor(fake_parse.size(0), 13, opt.fine_height, opt.fine_width).zero_().cuda()
-            old_parse.scatter_(1, fake_parse, 1.0)
+            
 
             labels = {
                 0:  ['background',  [0]],
@@ -250,7 +255,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 5:  ['right_arm',   [6]],
                 6:  ['noise',       [12]]
             }
-            parse = torch.FloatTensor(fake_parse.size(0), 7, opt.fine_height, opt.fine_width).zero_().cuda()
+            parse = torch.FloatTensor(old_parse.size(0), 7, opt.fine_height, opt.fine_width).zero_().cuda()
             for i in range(len(labels)):
                 for label in labels[i][1]:
                     parse[:, i] += old_parse[:, label]
@@ -274,6 +279,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 pred_fake = []
                 pred_real = []
                 for p in pred:
+                    # NOTE: haft of the tensors are of fake pred, and the other half is of real pred
                     pred_fake.append([tensor[:tensor.size(0) // 2] for tensor in p])
                     pred_real.append([tensor[tensor.size(0) // 2:] for tensor in p])
             else:
@@ -311,9 +317,9 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
         #                                            Train the discriminator
         # --------------------------------------------------------------------------------------------------------------
         with torch.no_grad():
-            output = generator(torch.cat((agnostic, pose, warped_cloth_paired), dim=1), parse)
-            output = output.detach()
-            output.requires_grad_()
+            output = generator(torch.cat((agnostic, pose, warped_cloth_paired), dim=1), parse) # NOTE: redundant; could just reuse previous output, and detach it.
+            output = output.detach() # NOTE: redundant since torch.no_grad is enough
+            output.requires_grad_() # NOTE: redundant
 
         # NOTE: AMP code
         with torch.autocast(device_type="cuda"):
