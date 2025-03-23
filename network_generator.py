@@ -79,7 +79,7 @@ class SPADENorm(nn.Module):
         self.noise_scale = nn.Parameter(torch.zeros(norm_nc))
 
         assert norm_type.startswith('alias')
-        param_free_norm_type = norm_type[len('alias'):]
+        param_free_norm_type = norm_type[len('alias'):] # NOTE:param_free_norm_type is set as `instance` by dault
         if param_free_norm_type == 'batch':
             self.param_free_norm = nn.BatchNorm2d(norm_nc, affine=False)
         elif param_free_norm_type == 'instance':
@@ -101,6 +101,7 @@ class SPADENorm(nn.Module):
     def forward(self, x, seg, misalign_mask=None):
         # Part 1. Generate parameter-free normalized activations.
         b, c, h, w = x.size()
+        # NOTE: adding noise is not neccessary optimal practice, and it is not used in the official SPADE norm implementation
         if self.param_opt.cuda :
             noise = (torch.randn(b, w, h, 1).cuda() * self.noise_scale).transpose(1, 3)
         else:
@@ -136,7 +137,7 @@ class SPADEResBlock(nn.Module):
 
         subnorm_type = opt.norm_G
         if subnorm_type.startswith('spectral'):
-            subnorm_type = subnorm_type[len('spectral'):]
+            subnorm_type = subnorm_type[len('spectral'):] # Note: subnorm_type is set as the text after `spectral in opt.norm_G, which is aliasinstance by default.`
             self.conv_0 = spectral_norm(self.conv_0)
             self.conv_1 = spectral_norm(self.conv_1)
             if self.learned_shortcut:
@@ -260,6 +261,8 @@ class NLayerDiscriminator(BaseNetwork):
 
         input_nc = opt.gen_semantic_nc + 3
         # input_nc = opt.gen_semantic_nc + 13
+        # NOTE: with kernel_size=4, stride=2, padding=2, the spatial size of tensor after each such Conv2d is (h/2+1, w/2+1). 
+        # NOTE: for the purpose of detecting real or fake object, kernel_size=4 could be better than using kernel_size=3, since each output node capture more information from the previous layer, and thus has better global view. kernel_size=3 can be useful in case to capture finer details. 
         sequence = [[nn.Conv2d(input_nc, nf, kernel_size=kw, stride=2, padding=pw),
                      nn.LeakyReLU(0.2, False)]]
 
