@@ -22,6 +22,8 @@ def get_opt():
     parser.add_argument('-b', '--batch-size', type=int, default=8)
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
+    parser.add_argument('--output_dir', type=str, default='', help='Output dir')
+
     parser.add_argument("--dataroot", default="./data/zalando-hd-resize")
     parser.add_argument("--datamode", default="test")
     parser.add_argument("--data_list", default="test_pairs.txt")
@@ -58,6 +60,8 @@ def get_opt():
     parser.add_argument('--spectral', action='store_true', help="Apply spectral normalization to D")
     parser.add_argument('--norm_const', type=float, help='Normalizing constant for rejection sampling')
     
+
+
     opt = parser.parse_args()
     return opt
 
@@ -70,8 +74,8 @@ def test(opt, test_loader, board, tocg, D=None):
         D.cuda()
         D.eval()
     
-    os.makedirs(os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
-                             opt.datamode, opt.datasetting, 'multi-task'), exist_ok=True)
+    # os.makedirs(os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
+    #                          opt.datamode, opt.datasetting, 'multi-task'), exist_ok=True)
     num = 0
     iter_start_time = time.time()
     if D is not None:
@@ -137,8 +141,7 @@ def test(opt, test_loader, board, tocg, D=None):
                             (im_c[i].cpu() / 2 + 0.5), parse_cloth_mask[i].cpu().expand(3, -1, -1), (warped_cloth_paired[i].cpu().detach() / 2 + 0.5), (warped_cm_onehot[i].cpu().detach()).expand(3, -1, -1),
                             visualize_segmap(label.cpu(), batch=i), visualize_segmap(fake_segmap.cpu(), batch=i), (im[i]/2 +0.5), (misalign[i].cpu().detach()).expand(3, -1, -1)],
                                 nrow=4)
-            save_image(grid, os.path.join('./output', opt.tocg_checkpoint.split('/')[-2], opt.tocg_checkpoint.split('/')[-1],
-                             opt.datamode, opt.datasetting, 'multi-task',
+            save_image(grid, os.path.join(opt.output_dir,
                              (inputs['c_name']['paired'][i].split('.')[0] + '_' +
                               inputs['c_name']['unpaired'][i].split('.')[0] + '.png')))
         num += c_paired.shape[0]
