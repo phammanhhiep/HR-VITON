@@ -232,6 +232,7 @@ def train(opt, train_loader, test_loader, test_vis_loader, board, tocg, generato
                 N, _, iH, iW = c_paired.shape
                 grid = make_grid(N, iH, iW,opt)
                 flow = F.interpolate(flow_list[-1].permute(0, 3, 1, 2), size=(iH, iW), mode='bilinear').permute(0, 2, 3, 1)
+                # NOTE: 128x96 is size of image the flow is generated to wrap before it is upscaled. The fomular is consistent to those used in train_condition.py and network.py.  
                 flow_norm = torch.cat([flow[:, :, :, 0:1] / ((96 - 1.0) / 2.0), flow[:, :, :, 1:2] / ((128 - 1.0) / 2.0)], 3)
                 warped_grid = grid + flow_norm
                 warped_cloth_paired = F.grid_sample(c_paired, warped_grid, padding_mode='border').detach()
